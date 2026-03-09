@@ -88,16 +88,19 @@ log "Step 1.4: Intermediate URL: $PORTAL_ENTRY_URL"
 
 # --- Step 2: Follow intermediate URL to reach the final auth page ---
 log "Step 2.1: Following redirect to final auth page..."
-curl -s -L --connect-timeout 5 --max-time "$MAX_TIME" -D "$HEADER_FILE" "$PORTAL_ENTRY_URL" -o /dev/null
+if ! curl -s -L --connect-timeout 5 --max-time "$MAX_TIME" -D "$HEADER_FILE" "$PORTAL_ENTRY_URL" -o /dev/null; then
+    log "Step 2.2: ERROR - Failed to fetch final auth page."
+    exit 1
+fi
 echo "--- [Step 2] Final Redirect Headers ---" >> "$DEBUG_FILE"
 cat "$HEADER_FILE" >> "$DEBUG_FILE"
 
 FINAL_AUTH_URL=$(grep -i "^Location:" "$HEADER_FILE" | tail -1 | awk '{print $2}' | tr -d '\r')
 if [ -z "$FINAL_AUTH_URL" ]; then
-    log "Step 2.2: WARNING - No second redirect detected. Using intermediate URL as final."
+    log "Step 2.3: WARNING - No second redirect detected. Using intermediate URL as final."
     FINAL_AUTH_URL="$PORTAL_ENTRY_URL"
 fi
-log "Step 2.3: Reached Final Auth Page URL: $FINAL_AUTH_URL"
+log "Step 2.4: Reached Final Auth Page URL: $FINAL_AUTH_URL"
 
 # --- Step 3: Parse dynamic parameters from the auth URL ---
 log "Step 3.1: Parsing dynamic parameters..."
@@ -118,7 +121,7 @@ MASKED_PASS=$(echo "$PASSWORD" | sed 's/./*/g')
 echo "--- [Step 4] POST Data (password masked) ---" >> "$DEBUG_FILE"
 echo "$POST_DATA" | sed "s/userPass=$PASSWORD/userPass=$MASKED_PASS/" >> "$DEBUG_FILE"
 
-auth_response_body=$(curl -sS "$LOGIN_POST_URL" \
+if ! auth_response_body=$(curl -sS "$LOGIN_POST_URL" \
   --connect-timeout 5 \
   --max-time "$MAX_TIME" \
   -H "Accept: application/json, text/javascript, */*; q=0.01" \
@@ -126,7 +129,10 @@ auth_response_body=$(curl -sS "$LOGIN_POST_URL" \
   -H "Referer: $FINAL_AUTH_URL" \
   -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
   -H "X-Requested-With: XMLHttpRequest" \
-  --data-raw "$POST_DATA")
+  --data-raw "$POST_DATA"); then
+    log "Step 4.2: ERROR - Authentication request failed."
+    exit 1
+fi
 
 echo "--- [Step 4] Final Authentication Response Body ---" >> "$DEBUG_FILE"
 echo "$auth_response_body" >> "$DEBUG_FILE"
@@ -138,6 +144,8 @@ if echo "$auth_response_body" | grep -q '"success":true'; then
 else
     error_code=$(echo "$auth_response_body" | sed -n 's/.*"errorcode":"\([^"]*\)".*/\1/p')
     log "Step 5.2: ERROR - Server responded, but login failed. Error code: ${error_code:-N/A}"
+    exit 1
 fi
 
 log "======== SCRIPT EXECUTION FINISHED ========"
+exit 0

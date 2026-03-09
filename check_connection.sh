@@ -11,3 +11,4 @@ fi
 
 logger -t "NetWatchdog" "Network check failed. Triggering login script..."
 /bin/sh "$LOGIN_SCRIPT"
+exit $?
