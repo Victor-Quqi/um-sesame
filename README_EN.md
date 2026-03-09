@@ -36,7 +36,8 @@ Designed to run on routers (OpenWrt, etc.) or any Linux device. Routers typicall
 # Option 1: Direct download
 wget https://github.com/Victor-Quqi/um-sesame/archive/refs/heads/main.tar.gz
 tar xzf main.tar.gz
-cd um-sesame-main
+mv um-sesame-main um-sesame
+cd um-sesame
 
 # Option 2: If git is available
 git clone https://github.com/Victor-Quqi/um-sesame.git
@@ -91,7 +92,10 @@ Alternatively, you can edit the crontab file directly. It is usually located at 
 ### Viewing Logs
 
 ```sh
-# Login records in syslog
+# Login records (OpenWrt)
+logread | grep "PortalLogin"
+
+# Login records (Debian/Ubuntu and similar)
 grep "PortalLogin" /var/log/syslog
 
 # Detailed debug log
@@ -104,7 +108,7 @@ This script was originally developed for Huawei captive portal authentication sy
 
 ## Security Notes
 
-- **TLS verification**: The script relies on curl's standard certificate and hostname verification and only follows portal redirects on the host configured in `LOGIN_URL`. If your portal certificate is not trusted by the system, install the correct CA certificate instead of disabling verification.
+- **TLS verification**: The script relies on curl's standard certificate and hostname verification. If the system does not trust your portal certificate, authentication may fail; bypassing verification with insecure mode would reintroduce man-in-the-middle risk.
 - **Password storage**: Credentials are stored in plaintext in `.env`. Make sure to set file permissions to `600` (`chmod 600 .env`).
 - **Debug logs**: The log file `/tmp/portal_debug.log` is automatically set to `600` permissions (owner-only). Passwords are masked with `***` in the logs.
 - **Router environment**: Routers are typically single-user (root) environments, so the file permission risks are low. However, if other users have SSH access to the router, take care accordingly.

@@ -36,7 +36,8 @@
 # 方法一：直接下载
 wget https://github.com/Victor-Quqi/um-sesame/archive/refs/heads/main.tar.gz
 tar xzf main.tar.gz
-cd um-sesame-main
+mv um-sesame-main um-sesame
+cd um-sesame
 
 # 方法二：如果有 git
 git clone https://github.com/Victor-Quqi/um-sesame.git
@@ -91,7 +92,10 @@ crontab -e
 ### 查看日志
 
 ```sh
-# syslog 中的登录记录
+# 登录记录（OpenWrt）
+logread | grep "PortalLogin"
+
+# 登录记录（Debian/Ubuntu 等）
 grep "PortalLogin" /var/log/syslog
 
 # 详细的调试日志
@@ -104,7 +108,7 @@ cat /tmp/portal_debug.log
 
 ## 安全注意事项
 
-- **TLS 验证**：脚本依赖 curl 的标准证书校验与主机名校验，并且只会跟随 `LOGIN_URL` 所在主机上的门户跳转。如果系统不信任你的门户证书，请安装正确的 CA 证书，而不是关闭验证。
+- **TLS 验证**：脚本依赖 curl 的标准证书校验与主机名校验。如果系统不信任你的门户证书，认证可能会失败；如果改回 insecure 模式，则会重新引入中间人攻击风险。
 - **密码存储**：账号密码以明文存放在 `.env` 中。请确保 `.env` 的文件权限为 `600`（`chmod 600 .env`）。
 - **调试日志**：日志文件 `/tmp/portal_debug.log` 已自动设为 `600` 权限，仅文件所有者可读取。日志中的密码会以 `***` 遮蔽。
 - **路由器环境**：路由器通常为单用户（root）环境，上述文件权限的风险较低，但若有其他用户通过 SSH 访问路由器，仍应留意。
