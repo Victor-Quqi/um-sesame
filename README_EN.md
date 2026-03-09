@@ -104,7 +104,7 @@ This script was originally developed for Huawei captive portal authentication sy
 
 ## Security Notes
 
-- **SSL verification**: The script uses `curl --insecure` to skip SSL certificate validation. Campus portal certificates are often not trusted by the system — this is a known trade-off. Remove the `--insecure` flags if your portal has a valid certificate.
+- **TLS verification**: The script relies on curl's standard certificate and hostname verification and only follows portal redirects on the host configured in `LOGIN_URL`. If your portal certificate is not trusted by the system, install the correct CA certificate instead of disabling verification.
 - **Password storage**: Credentials are stored in plaintext in `.env`. Make sure to set file permissions to `600` (`chmod 600 .env`).
 - **Debug logs**: The log file `/tmp/portal_debug.log` is automatically set to `600` permissions (owner-only). Passwords are masked with `***` in the logs.
 - **Router environment**: Routers are typically single-user (root) environments, so the file permission risks are low. However, if other users have SSH access to the router, take care accordingly.

@@ -10,6 +10,10 @@ log() {
     logger -t "PortalLogin" "$1"
 }
 
+extract_host() {
+    printf '%s' "$1" | sed -n 's#^[a-zA-Z][a-zA-Z0-9+.-]*://\([^/:?#]*\).*#\1#p'
+}
+
 if [ ! -f "$ENV_FILE" ]; then
     log "FATAL ERROR: .env file not found at $ENV_FILE"
     exit 1
@@ -48,6 +52,12 @@ if [ -z "$USERNAME" ] || [ -z "$PASSWORD" ] || [ -z "$LOGIN_URL" ]; then
     exit 1
 fi
 
+LOGIN_HOST=$(extract_host "$LOGIN_URL")
+if [ -z "$LOGIN_HOST" ]; then
+    log "FATAL ERROR: Unable to parse host from LOGIN_URL"
+    exit 1
+fi
+
 # --- Temp file paths (stored in /tmp, memory-backed) ---
 DEBUG_FILE="/tmp/portal_debug.log"
 HEADER_FILE="/tmp/portal_headers.txt"
@@ -60,7 +70,8 @@ chmod 600 "$DEBUG_FILE"
 chmod 600 "$HEADER_FILE"
 
 # --- Main ---
-log "======== SCRIPT EXECUTION STARTED (v11 Logger Edition) ========"
+log "======== SCRIPT EXECUTION STARTED (v12 TLS Verified) ========"
+log "Expected auth host: $LOGIN_HOST"
 
 # --- Step 1: Detect captive portal via redirect ---
 DETECTION_URLS="http://detectportal.firefox.com/success.txt http://www.msftconnecttest.com/connecttest.txt"
@@ -68,8 +79,8 @@ PORTAL_ENTRY_URL=""
 
 for url in $DETECTION_URLS; do
     log "Step 1.1: Attempting to detect portal using: $url"
-    curl_output=$(curl --insecure -v --max-redirs 1 --connect-timeout 5 --max-time "$MAX_TIME" "$url" 2>&1)
-    
+    curl_output=$(curl -v --max-redirs 1 --connect-timeout 5 --max-time "$MAX_TIME" "$url" 2>&1)
+
     echo "--- [Step 1] Initial Redirect Detection ---" >> "$DEBUG_FILE"
     echo "$curl_output" >> "$DEBUG_FILE"
 
@@ -84,11 +95,17 @@ if [ -z "$PORTAL_ENTRY_URL" ]; then
     log "Step 1.3: ERROR - Failed to detect intermediate portal URL."
     exit 1
 fi
-log "Step 1.4: Intermediate URL: $PORTAL_ENTRY_URL"
+
+PORTAL_ENTRY_HOST=$(extract_host "$PORTAL_ENTRY_URL")
+if [ -z "$PORTAL_ENTRY_HOST" ] || [ "$PORTAL_ENTRY_HOST" != "$LOGIN_HOST" ]; then
+    log "Step 1.4: ERROR - Portal host mismatch. Expected $LOGIN_HOST, got ${PORTAL_ENTRY_HOST:-N/A}"
+    exit 1
+fi
+log "Step 1.5: Intermediate URL is on expected host: $PORTAL_ENTRY_HOST"
 
 # --- Step 2: Follow intermediate URL to reach the final auth page ---
 log "Step 2.1: Following redirect to final auth page..."
-curl -s -L --insecure --connect-timeout 5 --max-time "$MAX_TIME" -D "$HEADER_FILE" "$PORTAL_ENTRY_URL" -o /dev/null
+curl -s -L --connect-timeout 5 --max-time "$MAX_TIME" -D "$HEADER_FILE" "$PORTAL_ENTRY_URL" -o /dev/null
 echo "--- [Step 2] Final Redirect Headers ---" >> "$DEBUG_FILE"
 cat "$HEADER_FILE" >> "$DEBUG_FILE"
 
@@ -97,7 +114,13 @@ if [ -z "$FINAL_AUTH_URL" ]; then
     log "Step 2.2: WARNING - No second redirect detected. Using intermediate URL as final."
     FINAL_AUTH_URL="$PORTAL_ENTRY_URL"
 fi
-log "Step 2.3: Reached Final Auth Page URL: $FINAL_AUTH_URL"
+
+FINAL_AUTH_HOST=$(extract_host "$FINAL_AUTH_URL")
+if [ -z "$FINAL_AUTH_HOST" ] || [ "$FINAL_AUTH_HOST" != "$LOGIN_HOST" ]; then
+    log "Step 2.3: ERROR - Final auth host mismatch. Expected $LOGIN_HOST, got ${FINAL_AUTH_HOST:-N/A}"
+    exit 1
+fi
+log "Step 2.4: Reached Final Auth Page URL on expected host: $FINAL_AUTH_HOST"
 
 # --- Step 3: Parse dynamic parameters from the auth URL ---
 log "Step 3.1: Parsing dynamic parameters..."
@@ -126,8 +149,7 @@ auth_response_body=$(curl -sS "$LOGIN_POST_URL" \
   -H "Referer: $FINAL_AUTH_URL" \
   -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
   -H "X-Requested-With: XMLHttpRequest" \
-  --data-raw "$POST_DATA" \
-  --insecure)
+  --data-raw "$POST_DATA")
 
 echo "--- [Step 4] Final Authentication Response Body ---" >> "$DEBUG_FILE"
 echo "$auth_response_body" >> "$DEBUG_FILE"
@@ -138,7 +160,7 @@ if echo "$auth_response_body" | grep -q '"success":true'; then
     log "Step 5.2: SUCCESS - Authentication response confirms success!"
 else
     error_code=$(echo "$auth_response_body" | sed -n 's/.*"errorcode":"\([^"]*\)".*/\1/p')
-    log "Step 5.2: ERROR - Server responded, but login failed. Error code: ${error_code:-'N/A'}"
+    log "Step 5.2: ERROR - Server responded, but login failed. Error code: ${error_code:-N/A}"
 fi
 
 log "======== SCRIPT EXECUTION FINISHED ========"
