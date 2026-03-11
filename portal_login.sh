@@ -114,12 +114,30 @@ log "Step 3.2: Parsed Parameters: pushPageId=$pushPageId, ssid=$ssid"
 # --- Step 4: Build and send the login request ---
 LOGIN_POST_URL="$LOGIN_URL"
 log "Step 4.1: Sending authentication request..."
-POST_DATA="pushPageId=$pushPageId&userPass=$PASSWORD&esn=&apmac=&armac=&authType=1&ssid=$ssid&uaddress=$uaddress&umac=$umac&accessMac=&businessType=&acip=$acip&agreed=1&registerCode=&questions=&dynamicValidCode=&dynamicRSAToken=&validCode=&userName=$USERNAME"
 
-# Log sanitized POST data (mask password)
+# Log sanitized POST fields (mask password)
 MASKED_PASS=$(echo "$PASSWORD" | sed 's/./*/g')
 echo "--- [Step 4] POST Data (password masked) ---" >> "$DEBUG_FILE"
-echo "$POST_DATA" | sed "s/userPass=$PASSWORD/userPass=$MASKED_PASS/" >> "$DEBUG_FILE"
+printf '%s\n' \
+  "pushPageId=$pushPageId" \
+  "userPass=$MASKED_PASS" \
+  "esn=" \
+  "apmac=" \
+  "armac=" \
+  "authType=1" \
+  "ssid=$ssid" \
+  "uaddress=$uaddress" \
+  "umac=$umac" \
+  "accessMac=" \
+  "businessType=" \
+  "acip=$acip" \
+  "agreed=1" \
+  "registerCode=" \
+  "questions=" \
+  "dynamicValidCode=" \
+  "dynamicRSAToken=" \
+  "validCode=" \
+  "userName=$USERNAME" >> "$DEBUG_FILE"
 
 if ! auth_response_body=$(curl -sS "$LOGIN_POST_URL" \
   --connect-timeout 5 \
@@ -129,7 +147,25 @@ if ! auth_response_body=$(curl -sS "$LOGIN_POST_URL" \
   -H "Referer: $FINAL_AUTH_URL" \
   -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
   -H "X-Requested-With: XMLHttpRequest" \
-  --data-raw "$POST_DATA"); then
+  --data-urlencode "pushPageId=$pushPageId" \
+  --data-urlencode "userPass=$PASSWORD" \
+  --data-urlencode "esn=" \
+  --data-urlencode "apmac=" \
+  --data-urlencode "armac=" \
+  --data-urlencode "authType=1" \
+  --data-urlencode "ssid=$ssid" \
+  --data-urlencode "uaddress=$uaddress" \
+  --data-urlencode "umac=$umac" \
+  --data-urlencode "accessMac=" \
+  --data-urlencode "businessType=" \
+  --data-urlencode "acip=$acip" \
+  --data-urlencode "agreed=1" \
+  --data-urlencode "registerCode=" \
+  --data-urlencode "questions=" \
+  --data-urlencode "dynamicValidCode=" \
+  --data-urlencode "dynamicRSAToken=" \
+  --data-urlencode "validCode=" \
+  --data-urlencode "userName=$USERNAME"); then
     log "Step 4.2: ERROR - Authentication request failed."
     exit 1
 fi
